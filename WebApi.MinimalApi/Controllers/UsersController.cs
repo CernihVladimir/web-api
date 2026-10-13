@@ -13,6 +13,7 @@ public class UsersController : Controller
 {
     private readonly IUserRepository _userRepository;
     private readonly IMapper _mapper;
+
     public UsersController(IUserRepository userRepository, IMapper mapper)
     {
         _userRepository = userRepository;
@@ -20,15 +21,22 @@ public class UsersController : Controller
     }
 
     [HttpGet("{userId}", Name = nameof(GetUserById))]
+    [HttpHead("{userId}")]
     public ActionResult<UserDto> GetUserById([FromRoute] Guid userId)
     {
-        // поиск пользователя в репозитории
+        // поиск пользователя в репозитории (проверьте, GetById или FindById требует ваш репозиторий)
         var userEntity = _userRepository.FindById(userId);
         
-        // не нащел - 404
+        // не нашёл - 404
         if (userEntity == null)
         {
             return NotFound();
+        }
+
+        // Если это HEAD запрос, возвращаем только заголовки (без тела)
+        if (HttpMethods.IsHead(Request.Method))
+        {
+            return Ok();
         }
 
         // Маппим Entity в DTO 
@@ -44,7 +52,7 @@ public class UsersController : Controller
     }
 
     [HttpPost]
-    public IActionResult CreateUser([FromBody] CreateUserDto user) // fffffffffffffffffffffff
+    public IActionResult CreateUser([FromBody] CreateUserDto user)
     {
         if (user == null || !ModelState.IsValid)
         {
@@ -95,10 +103,30 @@ public class UsersController : Controller
             return UnprocessableEntity(ModelState);
         }
 
-        // Маппим обновленный DTO обратно в Entity и сохраняем в репозиторий
+        // Маппим обновленный DTV обратно в Entity и сохраняем в репозиторий
         _mapper.Map(updateDto, userEntity);
         _userRepository.Update(userEntity);
 
         return NoContent();
+    }
+
+    [HttpDelete("{userId}")]
+    public IActionResult DeleteUser([FromRoute] Guid userId)
+    {
+        var user = _userRepository.FindById(userId);
+        if (user == null)
+        {
+            return NotFound();
+        }
+
+        _userRepository.Delete(userId);
+        return NoContent();
+    }
+
+    [HttpOptions]
+    public IActionResult GetUsersOptions()
+    {
+        Response.Headers["Allow"] = "GET, POST, OPTIONS";
+        return Ok();
     }
 }
