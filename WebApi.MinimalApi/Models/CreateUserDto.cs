@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 
 namespace WebApi.MinimalApi.Models;
@@ -6,11 +5,9 @@ namespace WebApi.MinimalApi.Models;
 public class CreateUserDto
 {
     [Required]
-    public string Login { get; set; }
+    public string Login { get; set; } = string.Empty;
 
-    [DefaultValue("John")]
-    public string FirstName { get; set; }
+    public string FirstName { get; set; } = "John";
 
-    [DefaultValue("Doe")]
-    public string LastName { get; set; }
+    public string LastName { get; set; } = "Doe";
 }

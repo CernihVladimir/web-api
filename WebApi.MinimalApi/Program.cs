@@ -1,9 +1,7 @@
 using WebApi.MinimalApi.Domain;
 using AutoMapper;
-using Microsoft.AspNetCore.Mvc.Formatters;
+using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
-using System.Buffers;
 using WebApi.MinimalApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,28 +21,28 @@ builder.Services.AddAutoMapper(cfg =>
 
 
 // контроллеры, JSON, XML и статус 406
-builder.Services.AddControllers(options =>
-{
-    // разрешаем XML
-    options.OutputFormatters.Add(new XmlSerializerOutputFormatter());
-    
-    // ставим json на первое место с CamelCase нотацией
-    options.OutputFormatters.Insert(0, new NewtonsoftJsonOutputFormatter(
-        new JsonSerializerSettings
-        {
-            ContractResolver = new CamelCasePropertyNamesContractResolver()
-        }, ArrayPool<char>.Shared, options));
 
-    // вернуть 406 для неизвестных форматов
-    options.ReturnHttpNotAcceptable = true;
-    
-    // игнорить заголовок Accept при */* и возвращать json
-    options.RespectBrowserAcceptHeader = true;
-})
-.ConfigureApiBehaviorOptions(options => {
-    options.SuppressModelStateInvalidFilter = true;
-    options.SuppressMapClientErrors = true;
-});
+builder.Services
+    .AddControllers(options =>
+    {
+        // Возвращать 406 для неподдерживаемого формата.
+        options.ReturnHttpNotAcceptable = true;
+
+        // Учитывать заголовок Accept.
+        options.RespectBrowserAcceptHeader = true;
+    })
+    .AddNewtonsoftJson(options =>
+    {
+        // Сохраняем CamelCase для JSON.
+        options.SerializerSettings.ContractResolver =
+            new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
+    })
+    .AddXmlSerializerFormatters()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.SuppressModelStateInvalidFilter = true;
+        options.SuppressMapClientErrors = true;
+    });
 
 var app = builder.Build();
 
