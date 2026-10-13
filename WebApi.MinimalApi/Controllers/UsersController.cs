@@ -69,6 +69,46 @@ public class UsersController : Controller
         );
     }
 
+    [HttpPut("{userId}")]
+    public IActionResult UpdateUser(
+        [FromRoute] Guid userId,
+        [FromBody] UpdateDto user)
+    {
+        if (!Guid.TryParse(
+            RouteData.Values["userId"]?.ToString(),
+            out var parsedUserId))
+        {
+            return BadRequest();
+        }
+
+        if (user == null)
+        {
+            return BadRequest();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return UnprocessableEntity(ModelState);
+        }
+
+        var userEntity = _userRepository.FindById(parsedUserId)
+            ?? new UserEntity(parsedUserId);
+
+        _mapper.Map(user, userEntity);
+
+        _userRepository.UpdateOrInsert(userEntity, out var isInserted);
+
+        if (isInserted)
+        {
+            return CreatedAtRoute(
+                nameof(GetUserById),
+                new { userId = parsedUserId },
+                parsedUserId.ToString());
+        }
+
+        return NoContent();
+    }
+
     [HttpPatch("{userId}")]
     public IActionResult PartiallyUpdateUser([FromRoute] Guid userId, [FromBody] JsonPatchDocument<UpdateDto> patchDoc)
     {
