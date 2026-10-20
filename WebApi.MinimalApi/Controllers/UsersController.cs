@@ -32,40 +32,26 @@ public class UsersController : Controller
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10)
     {
-        // Ограничиваем параметры допустимыми значениями.
         pageNumber = Math.Max(1, pageNumber);
         pageSize = Math.Clamp(pageSize, 1, 20);
 
-        // Получаем страницу пользователей.
         var pageList = _userRepository.GetPage(pageNumber, pageSize);
-
-        // Преобразуем сущности в DTO.
         var users = _mapper.Map<IEnumerable<UserDto>>(pageList);
 
-        // Формируем ссылки на соседние страницы.
         var previousPageLink = pageNumber > 1
             ? _linkGenerator.GetUriByRouteValues(
                 HttpContext,
                 nameof(GetUsers),
-                new
-                {
-                    pageNumber = pageNumber - 1,
-                    pageSize
-                })
+                new { pageNumber = pageNumber - 1, pageSize })
             : null;
 
         var nextPageLink = pageNumber < pageList.TotalPages
             ? _linkGenerator.GetUriByRouteValues(
                 HttpContext,
                 nameof(GetUsers),
-                new
-                {
-                    pageNumber = pageNumber + 1,
-                    pageSize
-                })
+                new { pageNumber = pageNumber + 1, pageSize })
             : null;
 
-        // Формируем информацию о пагинации.
         var paginationHeader = new
         {
             previousPageLink,
@@ -86,22 +72,19 @@ public class UsersController : Controller
     [HttpHead("{userId}")]
     public ActionResult<UserDto> GetUserById([FromRoute] Guid userId)
     {
-        // поиск пользователя в репозитории (проверьте, GetById или FindById требует ваш репозиторий)
         var userEntity = _userRepository.FindById(userId);
-        
-        // не нашёл - 404
+
         if (userEntity == null)
         {
             return NotFound();
         }
 
-        // Если это HEAD запрос, возвращаем только заголовки (без тела)
         if (HttpMethods.IsHead(Request.Method))
         {
+            Response.ContentType = "application/json; charset=utf-8";
             return Ok();
         }
 
-        // Маппим Entity в DTO 
         var userDto = new UserDto
         {
             Id = userEntity.Id,
@@ -109,7 +92,6 @@ public class UsersController : Controller
             FullName = $"{userEntity.LastName} {userEntity.FirstName}"
         };
 
-        // возвращаем 200 и объект
         return Ok(userDto);
     }
 
@@ -121,33 +103,18 @@ public class UsersController : Controller
             return BadRequest();
         }
 
+        if (!string.IsNullOrEmpty(user.Login) && !user.Login.All(char.IsLetterOrDigit))
+        {
+            ModelState.AddModelError("login", "Login should contain only letters or digits");
+        }
+
         if (!ModelState.IsValid)
         {
             var errors = ModelState
                 .Where(entry => entry.Value?.Errors.Count > 0)
                 .ToDictionary(
                     entry => entry.Key.ToLowerInvariant(),
-                    entry => entry.Value!.Errors
-                        .Select(error => error.ErrorMessage)
-                        .ToArray()
-                );
-
-            return new ObjectResult(errors)
-            {
-                StatusCode = 422,
-                ContentTypes = { "application/json" }
-            };
-        }
-
-        if (!user.Login.All(char.IsLetterOrDigit))
-        {
-            var errors = new Dictionary<string, string[]>
-            {
-                ["login"] = new[]
-                {
-                    "Login should contain only letters or digits"
-                }
-            };
+                    entry => entry.Value!.Errors.Select(e => e.ErrorMessage).ToArray());
 
             return new ObjectResult(errors)
             {
@@ -157,37 +124,20 @@ public class UsersController : Controller
         }
 
         var userEntity = _mapper.Map<UserEntity>(user);
-        _userRepository.Insert(userEntity);
+        var createdUserEntity = _userRepository.Insert(userEntity);
 
-        var createdDto = _mapper.Map<UserDto>(userEntity);
-
-        if (Request.Headers.Accept.Any(
-                value => value?.Contains(
-                    "application/xml",
-                    StringComparison.OrdinalIgnoreCase) == true))
-        {
-            return CreatedAtRoute(
-                nameof(GetUserById),
-                new { userId = userEntity.Id },
-                userEntity.Id
-            );
-        }
+        var createdDto = _mapper.Map<UserDto>(createdUserEntity);
 
         return CreatedAtRoute(
             nameof(GetUserById),
-            new { userId = userEntity.Id },
-            createdDto
-        );
+            new { userId = createdUserEntity.Id },
+            createdDto);
     }
 
     [HttpPut("{userId}")]
-    public IActionResult UpdateUser(
-        [FromRoute] Guid userId,
-        [FromBody] UpdateDto user)
+    public IActionResult UpdateUser([FromRoute] string userId, [FromBody] UpdateDto user)
     {
-        if (!Guid.TryParse(
-            RouteData.Values["userId"]?.ToString(),
-            out var parsedUserId))
+        if (!Guid.TryParse(userId, out var parsedUserId))
         {
             return BadRequest();
         }
@@ -206,7 +156,6 @@ public class UsersController : Controller
             ?? new UserEntity(parsedUserId);
 
         _mapper.Map(user, userEntity);
-
         _userRepository.UpdateOrInsert(userEntity, out var isInserted);
 
         if (isInserted)
@@ -221,7 +170,9 @@ public class UsersController : Controller
     }
 
     [HttpPatch("{userId}")]
-    public IActionResult PartiallyUpdateUser([FromRoute] Guid userId, [FromBody] JsonPatchDocument<UpdateDto> patchDoc)
+    public IActionResult PartiallyUpdateUser(
+        [FromRoute] Guid userId,
+        [FromBody] JsonPatchDocument<UpdateDto> patchDoc)
     {
         if (patchDoc == null)
         {
@@ -234,19 +185,15 @@ public class UsersController : Controller
             return NotFound();
         }
 
-        // Маппим сущность в UpdateDto для применения патча
         var updateDto = _mapper.Map<UpdateDto>(userEntity);
 
-        // Применяем изменения из патча к DTO
         patchDoc.ApplyTo(updateDto, ModelState);
 
-        // Валидируем модель после применения патча
         if (!TryValidateModel(updateDto))
         {
             return UnprocessableEntity(ModelState);
         }
 
-        // Маппим обновленный DTV обратно в Entity и сохраняем в репозиторий
         _mapper.Map(updateDto, userEntity);
         _userRepository.Update(userEntity);
 
