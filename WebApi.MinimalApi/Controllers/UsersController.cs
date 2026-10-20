@@ -126,12 +126,10 @@ public class UsersController : Controller
         var userEntity = _mapper.Map<UserEntity>(user);
         var createdUserEntity = _userRepository.Insert(userEntity);
 
-        var createdDto = _mapper.Map<UserDto>(createdUserEntity);
-
         return CreatedAtRoute(
             nameof(GetUserById),
             new { userId = createdUserEntity.Id },
-            createdDto);
+            createdUserEntity.Id);
     }
 
     [HttpPut("{userId}")]
